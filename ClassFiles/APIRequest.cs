@@ -15,7 +15,25 @@ namespace APIDataHelper
         {
             get
             {
-                string url = "";
+                string url = $"{ApiBaseUrl}/{Controller}";
+                int index = 0;
+                if (!(Parameters.Count() == 0)) return url;
+                url += "?";
+                foreach (var item in Parameters)
+                {
+                    url += $"{item.Key}={item.Value}";
+                    if (!(Parameters.Count == index)) url += "&";
+                    index++;
+                }
+                return url;
+            }
+        }
+
+        public string ControllerRequest
+        {
+            get
+            {
+                string url = $"{Controller}";
                 int index = 0;
                 if (!(Parameters.Count() == 0)) return url;
                 url += "?";

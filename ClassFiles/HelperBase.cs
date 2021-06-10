@@ -69,7 +69,7 @@ namespace APIDataHelper
         {
             Http = httpFactory.CreateClient();
             ApiUrl = apiRequest.ApiBaseUrl;
-            _apiCall = apiRequest.FullRequest;
+            _apiCall = apiRequest.ControllerRequest;
             if (waitOverload > 10000 || waitOverload < 10)
             {
                 throw new Exception("The reconnection wait period cannot be over 10 seconds or under 10ms!!!");

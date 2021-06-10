@@ -10,10 +10,11 @@
     <PackageProjectUrl>https://github.com/Wisetorsk/APIDataHelper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Wisetorsk/APIDataHelper</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <AssemblyVersion>0.1.0.1</AssemblyVersion>
+    <FileVersion>0.1.0.1</FileVersion>
     <NeutralLanguage />
     <PackageLicenseFile>license.txt</PackageLicenseFile>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
