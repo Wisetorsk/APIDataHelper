@@ -4,10 +4,10 @@ using System.Text;
 
 namespace APIDataHelper
 { 
-    public interface IBaseDTO<Tdata>
+    public interface IBaseModel<TDto>
     {
         int CurrentPage { get; set; }
-        Tdata[] Data { get; set; }
+        TDto[] Data { get; set; }
         int NextPage { get; set; }
         int NoOfPagesForQuery { get; set; }
         int NoOfRowsInDataset { get; set; }

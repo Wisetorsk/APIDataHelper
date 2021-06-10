@@ -15,43 +15,45 @@ namespace APIDataHelper
     /// </summary>
     /// <typeparam name="Tdto">DTO object representing the rows of data in database/datastore</typeparam>
     /// <typeparam name="Tdata">Model object representing the returned payload from api call with metadata</typeparam>
-    public abstract class HelperBase<Tdto, Tdata> : IHelperBase<Tdata> where Tdata : IBaseDTO<Tdto>
+    public abstract class HelperBase<Tdto, Tdata> : IHelperBase<Tdto, Tdata> where Tdata : IBaseModel<Tdto>
     {
         public Tdto[] Data { get; set; }
-        public Tdata QueryResult { get; set; }
+        public Tdata Search { get; set; }
         public HttpClient Http { get; set; }
-
-        public APIRequest RequestObject { get; set; }
-
-        public readonly string apiUrl;
+        public readonly string ApiUrl;
         private readonly string _rowReturnParamName = "AntallRaderIRetur"; // Should be read from file, or given externally!
         private readonly string _pagesReturnParamName = "side"; // Should be read from file, or given externally!
-        private readonly string _apiCall;
+        private string AmountToGet(int numberToGet) => $"?{_rowReturnParamName}={numberToGet}";
+        private string Page(int pageNum) => $"&{_pagesReturnParamName}={pageNum}";
+        private string _apiCall;
         private readonly int _retryWaitTime = 500; //500ms default
         private bool _waiting = false;
         private DateTime? _lastFetched; //Time of last datafetch
-        private readonly int _fetchReconnectionDelayTime = 2000; // Minimum time between refreshes of data. (in milliseconds)
+        private int _fetchReconnectionDelayTime = 2000; // Minimum time between refreshes of data. (in milliseconds) 
+
+        public int? CurrentPage => Search?.CurrentPage;
+        public int? NextPage => Search?.NextPage;
+        public int? PreviousPage => Search?.PreviousPage;
 
         public event Action FetchingData;
+        public event Action FetchFailed;
+        public event EventHandler<DataHelperEventArgs<Tdata>> DoneFecthing;
 
-        public event Action DoneFecthing;
-
-        private string AmountToGet(int numberToGet) => $"?{_rowReturnParamName}={numberToGet}";
-
-        private string Page(int pageNum) => $"&{_pagesReturnParamName}={pageNum}";
-
-        public int? CurrentPage => QueryResult?.CurrentPage;
-        public int? NextPage => QueryResult?.NextPage;
-        public int? PreviousPage => QueryResult?.PreviousPage;
+        private int _reconnectionBreaker = 2;
 
         private void NotifyFetchingData() => FetchingData?.Invoke();
+        private void NotifyFetchFailed() => FetchFailed?.Invoke();
+        private void NotifyDoneFetching(Tdata result) => DoneFecthing?.Invoke(this, new DataHelperEventArgs<Tdata>(result));
 
-        private void NotifyDoneFetching() => DoneFecthing?.Invoke();
+        public Tdto[] ReturnData()
+        {
+            return Data;
+        }
 
         public HelperBase(IHttpClientFactory httpFactory, string apiurl, string apiCall, int? waitOverload = null)
         {
             Http = httpFactory.CreateClient();
-            apiUrl = apiurl;
+            ApiUrl = apiurl;
             _apiCall = apiCall;
             if (waitOverload > 10000 || waitOverload < 10)
             {
@@ -63,10 +65,11 @@ namespace APIDataHelper
             }
         }
 
-        public HelperBase(IHttpClientFactory httpFactory, APIRequest request, int? waitOverload = null)
+        public HelperBase(IHttpClientFactory httpFactory, APIRequest apiRequest, int? waitOverload = null)
         {
             Http = httpFactory.CreateClient();
-            RequestObject = request;
+            ApiUrl = apiRequest.ApiBaseUrl;
+            _apiCall = apiRequest.FullRequest;
             if (waitOverload > 10000 || waitOverload < 10)
             {
                 throw new Exception("The reconnection wait period cannot be over 10 seconds or under 10ms!!!");
@@ -86,7 +89,7 @@ namespace APIDataHelper
         public async Task GetNewData(int amount = 100, int page = 1)
         {
             int connectionAttempts = 0;
-            int reconnectionBreaker = 3; // max three reconnection attepmts. Find way to separate breaker logic to external method
+            // max three reconnection attepmts. Find way to separate breaker logic to external method
             if (_lastFetched != null)
             {
                 var now = DateTime.Now;
@@ -106,23 +109,18 @@ namespace APIDataHelper
                     if (!_waiting)
                     {
                         connectionAttempts++;
-                        HttpResponseMessage response;
-                        if (RequestObject is null)
-                        {
-                            response = await Http.GetAsync($"{apiUrl}/{_apiCall}{AmountToGet(amount)}{Page(page)}");
-                        } else
-                        {
-                            response = await Http.GetAsync(RequestObject.FullRequest);
-                        }
+                        var response = await Http.GetAsync($"{ApiUrl}/{_apiCall}");
                         if (response.IsSuccessStatusCode)
                         {
-                            QueryResult = JsonConvert.DeserializeObject<Tdata>(await response.Content.ReadAsStringAsync());
-                            Data = QueryResult.Data; // Kinda creates a copy of the data tho... right? bad?
-                            NotifyDoneFetching(); // Needs to ensure that ALL data has been fetched before being fired.
+                            Search = JsonConvert.DeserializeObject<Tdata>(await response.Content.ReadAsStringAsync());
+                            Data = Search.Data; // Kinda creates a copy of the data tho... right? bad?
+                            NotifyDoneFetching(Search); // Needs to ensure that ALL data has been fetched before being fired.
                         }
                         _lastFetched = DateTime.Now;
                         Console.WriteLine($"Response code: {response.StatusCode}"); // Change to use of ILogger!!
                     }
+
+
                 }
                 catch (TimeoutException)
                 {
@@ -130,26 +128,49 @@ namespace APIDataHelper
                     var time = new System.Timers.Timer(_retryWaitTime) { Enabled = true };
                     _waiting = true;
                     time.Elapsed += SetWaitingToDone;
+                    NotifyFetchFailed();
                     // Find a way to "block" the thread. without.... blocking it...
                     // Maybe separate the api call and fetching logic into a separate method that can be attached to the timer.elapsed event???
                     Console.WriteLine($"Unable to connect to api, reconnecting...");
                 }
                 catch (Exception) // Most generic error.  Can error handlinng and processing be passed to an external class/middleware?
                 {
+                    NotifyFetchFailed();
                     Console.WriteLine("Unable to get data from API");
                     throw; // Add proper exception handling if the api responds with an error that can be handled or if it need to retry the connection.
                 }
-            } while (Data is null && connectionAttempts < reconnectionBreaker);
-            if (connectionAttempts >= reconnectionBreaker)
-            {
-                Console.WriteLine("Connection timed out");
-                throw new TooManyReconnectAttemptsException("Too many reconnection attempts", null);
-            }
+            } while (Data is null && connectionAttempts < _reconnectionBreaker);
+            if (connectionAttempts >= _reconnectionBreaker) Console.WriteLine("Connection timed out");
         }
+
+
+        public async Task GetAllData()
+        {
+            QueryMetadata metadata = await GetMetadata();
+            await GetNewData(metadata.NoOfRowsInQuery, 1);
+        }
+
 
         private void SetWaitingToDone(object sender, System.Timers.ElapsedEventArgs e)
         {
             _waiting = false;
+
+        }
+
+        public async Task<QueryMetadata> GetMetadata()
+        {
+            var response = await Http.GetAsync($"{ApiUrl}/{_apiCall}{AmountToGet(1)}{Page(1)}");
+            QueryMetadata metadata = new QueryMetadata();
+            if (response.IsSuccessStatusCode)
+            {
+                var responseBody = JsonConvert.DeserializeObject<Tdata>(await response.Content.ReadAsStringAsync());
+                metadata.NoOfPagesForQuery = responseBody.NoOfPagesForQuery;
+                metadata.NoOfRowsInDataset = responseBody.NoOfRowsInDataset;
+                metadata.NoOfRowsInQuery = responseBody.NoOfRowsInQuery;
+                metadata.PageSize = responseBody.PageSize;
+                return metadata;
+            }
+            return null;
         }
     }
 }

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace APIDataHelper
 {
-    public abstract class BaseDTO<Tdata> : IBaseDTO<Tdata>
+    public abstract class BaseModel<TDto> : IBaseModel<TDto>
     {
         public int NoOfRowsInDataset { get; set; } = 0;
         public int NoOfRowsInQuery { get; set; } = 0;
@@ -14,6 +14,6 @@ namespace APIDataHelper
         public int CurrentPage { get; set; } = 1;
         public int NextPage { get; set; } = 1;
         public int PreviousPage { get; set; } = 1;
-        public Tdata[] Data { get; set; }
+        public TDto[] Data { get; set; }
     }
 }
