@@ -1,0 +1,208 @@
+﻿@inject KOMTEK.KundeInnsyn.Common.Services.IDataExporter Exporter
+@using KOMTEK.KundeInnsyn.Common.Services
+@typeparam Tdata
+@implements IDisposable
+
+@if (BarMode)
+{
+    <Bar Breakpoint="Blazorise.Breakpoint.Desktop"
+         Background="Blazorise.Background.Light"
+         ThemeContrast="Blazorise.ThemeContrast.Light">
+        <BarBrand>
+            @BarTitle
+        </BarBrand>
+        <BarStart>
+            <BarItem>
+                <Tooltip Text=@("Velg " + '\u00F8' + "nsket format") Placement="Blazorise.Placement.Bottom" Fade="true">
+                    <Addons>
+                        <Addon AddonType="AddonType.Start">
+                            <AddonLabel>Format</AddonLabel>
+                        </Addon>
+                        <Addon AddonType="AddonType.Body">
+                            <Select TValue="int" @bind-SelectedValue="@_format" @onclick="SetClicked">
+                                <SelectItem Value="1">CSV</SelectItem>
+                                <SelectItem Value="5">XML</SelectItem>
+                                <SelectItem Disabled="true" Value="2">PDF</SelectItem>
+                                <SelectItem Value="3">JSON</SelectItem>
+                                <SelectItem Disabled="true" Value="4">YAML</SelectItem>
+                            </Select>
+                        </Addon>
+                    </Addons>
+                </Tooltip>
+            </BarItem>
+            <BarItem>
+                <Addons>
+                    <Addon AddonType="AddonType.Start">
+                        <Blazorise.Button class="nk-actionbutton" Color="Blazorise.Color.Primary" style="border-radius: 0 0 0 0;" Clicked="@ExportData">Generer export</Blazorise.Button>
+                    </Addon>
+                    <Addon AddonType="AddonType.End">
+                        @if (_exportReady && _warningText is null)
+                        {
+                            <a class="form-control btn btn-primary nk-green-bg" style="border-radius: 0 0 0 0;" href="/download?path=@_exportFilename" target="_blank">@((OutputFormats)_format)</a>
+                        }
+                        else if (_warningText is not null)
+                        {
+                            <a class="form-control btn btn-warning" style="border-radius: 0 0 0 0;">@_warningText</a>
+                        }
+                        else
+                        {
+                            <a class="form-control btn btn-warning" style="border-radius: 0 0 0 0;">@('\u2190')</a>
+                        }
+                    </Addon>
+                </Addons>
+            </BarItem>
+        </BarStart>
+        <BarEnd>
+            <BarItem>
+                @if (DataToExport is not null)
+                {
+                    <MudChip Icon="@Icons.Material.Filled.Storage" Label="true" Color="MudBlazor.Color.Info">@(TickerName): @DataToExport.Count()</MudChip>
+                }
+            </BarItem>
+        </BarEnd>
+    </Bar>
+}
+else
+{
+    <Row Gutter="(5, 32)">
+        <Column ColumnSize="ColumnSize.Is2">
+            <Tooltip Text=@("Velg " + '\u00F8' + "nsket format") Placement="Blazorise.Placement.Bottom" Fade="true">
+                <Addons>
+                    <Addon AddonType="AddonType.Start">
+                        <AddonLabel>Format</AddonLabel>
+                    </Addon>
+                    <Addon AddonType="AddonType.Body">
+                        <Select TValue="int" @bind-SelectedValue="@_format" @onclick="SetClicked">
+                            <SelectItem Value="1">CSV</SelectItem>
+                            <SelectItem Value="5">XML</SelectItem>
+                            <SelectItem Disabled="true" Value="2">PDF</SelectItem>
+                            <SelectItem Value="3">JSON</SelectItem>
+                            <SelectItem Disabled="true" Value="4">YAML</SelectItem>
+                        </Select>
+                    </Addon>
+                </Addons>
+            </Tooltip>
+        </Column>
+        <Column ColumnSize="ColumnSize.Is2">
+            <Addons>
+                <Addon AddonType="AddonType.Start">
+                    <Blazorise.Button class="nk-actionbutton" Color="Blazorise.Color.Primary" style="border-radius: 0 0 0 0;" Clicked="@ExportData">Generer export</Blazorise.Button>
+                </Addon>
+                <Addon AddonType="AddonType.End">
+                    @if (_exportReady && _warningText is null)
+                    {
+                        <a class="form-control btn btn-primary nk-green-bg" style="border-radius: 0 0 0 0;" href="/download?path=@_exportFilename" target="_blank">@((OutputFormats)_format)</a>
+                    }
+                    else if (_warningText is not null)
+                    {
+                        <a class="form-control btn btn-warning" style="border-radius: 0 0 0 0;">@_warningText</a>
+                    }
+                    else
+                    {
+                        <a class="form-control btn btn-warning" style="border-radius: 0 0 0 0;">@('\u2190')</a>
+                    }
+                </Addon>
+            </Addons>
+        </Column>
+    </Row>
+}
+
+@code {
+    [Parameter]
+    public IEnumerable<Tdata> DataToExport { get; set; }
+
+    [Parameter]
+    public string PathOverride { get; set; }
+
+    [Parameter]
+    public string FilenameOverride { get; set; }
+
+    [Parameter]
+    public bool BarMode { get; set; } = false;
+
+    [Parameter]
+    public string BarTitle { get; set; }
+
+    [Parameter]
+    public string TickerName { get; set; }
+
+    private bool _exportReady;
+    private string _warningText;
+    private string _exportFilename;
+
+    private int _format = 1;
+
+    private void SetClicked()
+    {
+        _exportReady = false;
+        _warningText = null;
+    }
+
+    private async void ExportData()
+    {
+        _exportReady = false;
+        _warningText = null;
+
+        var ExportArray = DataToExport.ToArray();
+
+        //_transactionsToExport = _allTransactions.Where(i => i.Dato >= _startTime && i.Dato < _endTime).ToArray();
+
+        if (!DataToExport.Any())
+        {
+            Console.WriteLine("No data to export in array, exiting");
+            _warningText = "NO DATA";
+            await InvokeAsync(() => StateHasChanged());
+            return;
+        }
+
+        await InvokeAsync(() => StateHasChanged());
+        OutputFormats formatSwitch = (OutputFormats)_format;
+
+        switch (formatSwitch)
+        {
+            case OutputFormats.CSV:
+                {
+                    await Exporter.ToCSV<Tdata>(ExportArray, "", FilenameOverride, PathOverride);
+                    break;
+                }
+            case OutputFormats.PDF:
+                break;
+            case OutputFormats.JSON:
+                {
+                    await Exporter.ToJSON<Tdata>(ExportArray, "", FilenameOverride, PathOverride);
+                    break;
+                }
+            case OutputFormats.YAML:
+                break;
+            case OutputFormats.XML:
+                {
+                    await Exporter.ToXML<Tdata>(ExportArray, "", FilenameOverride, PathOverride);
+                    break;
+                }
+            case OutputFormats.SELECT:
+                break;
+            default:
+                break;
+        }
+
+    }
+
+    private void RunExport(string filename)
+    {
+        //Console.WriteLine("The file is ready!");
+        _exportReady = true;
+        _exportFilename = filename;
+        InvokeAsync(() => StateHasChanged());
+    }
+
+    protected override void OnInitialized()
+    {
+        Exporter.ExportReady += RunExport;
+    }
+
+    void IDisposable.Dispose()
+    {
+        Exporter.ExportReady += RunExport;
+    }
+
+}

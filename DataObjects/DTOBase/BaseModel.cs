@@ -4,7 +4,7 @@ using System.Text;
 
 namespace APIDataHelper
 {
-    public abstract class BaseModel<TDto> : IBaseModel<TDto>
+    public class BaseModel<TDto> : IBaseModel<TDto>
     {
         public int NoOfRowsInDataset { get; set; } = 0;
         public int NoOfRowsInQuery { get; set; } = 0;
